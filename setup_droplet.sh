@@ -22,7 +22,7 @@ CREATE_DROPLET_API_URL="https://api.digitalocean.com/v2/droplets"
 # Set desired Droplet configuration
 DROPLET_NAME="testdroplet"
 REGION="ams3"
-SIZE="s-1vcpu-1gb"
+SIZE="s-4vcpu-8gb"
 IMAGE="ubuntu-20-04-x64"
 SSH_KEYS_API_URL="https://api.digitalocean.com/v2/account/keys"
 
@@ -76,16 +76,17 @@ while true; do
     fi
 done
 
-## Create npm package
-#cd app
-#npm pack
-#cd ..
+# Create npm package
+cd app
+npm pack
+cd ..
 
-# Function to execute a command with retries
+# Install all needed packages to run the application
 ssh -o "StrictHostKeyChecking=no" -T -A -i ~/.ssh/digital_ocean_macbook root@$public_ip << 'EOF'
    echo "Running apt-get update..."
    sudo apt-get update && \
    echo "apt-get update successful. Running node js"
+   sudo apt install net-tools
    sudo apt install nodejs -y
    sudo apt-get install npm -y
    node -v && npm -v && mkdir node_app
@@ -116,6 +117,13 @@ curl --location 'https://api.digitalocean.com/v2/firewalls' \
          "inbound_rules": [
              {
                  "protocol": "tcp",
+                 "ports": "22",
+                 "sources": {
+                     "addresses": ["0.0.0.0/0"]
+                 }
+             },
+             {
+                 "protocol": "tcp",
                  "ports": "3000",
                  "sources": {
                      "addresses": ["0.0.0.0/0"]
@@ -124,35 +132,25 @@ curl --location 'https://api.digitalocean.com/v2/firewalls' \
          ],
          "droplet_ids": ["'$DROPLET_ID'"]
      }'
+sleep 5
+ssh -A -i ~/.ssh/digital_ocean_macbook root@$public_ip << 'EOF'
+   pwd
+   cd node_app/package
+   echo "Starting server..."
+   nohup node server.js > server.log 2>&1 &
+   # Wait for a moment to allow the server to start
+   sleep 5
+   echo "Checking port 3000..."
+    ss -tuln
+EOF
 
+# Check if the specified port is open
+nc -zv "$public_ip" "3000"
 
+# Display the result
+if [ $? -eq 0 ]; then
+    echo "Port 3000 is open and accessible."
+else
+    echo "Port 3000 is not accessible."
+fi
 
-
-
-
-
-
-
-
-
-
-
-#ssh -A -i ~/.ssh/digital_ocean_macbook root@$public_ip << 'EOF'
-#   echo "Starting server..."
-#   nohup node server.js > server.log 2>&1 &
-#   # Wait for a moment to allow the server to start
-#   sleep 5
-#   echo "Checking port 3000..."
-#   netstat -tuln | grep :3000
-#EOF
-#
-## Check if the specified port is open
-#nc -zv "$public_ip" "$PORT_TO_OPEN"
-#
-## Display the result
-#if [ $? -eq 0 ]; then
-#    echo "Port $PORT_TO_OPEN is open and accessible."
-#else
-#    echo "Port $PORT_TO_OPEN is not accessible."
-#fi
-#
